@@ -5,8 +5,8 @@ on:
     branches:
       - main
       - master
-      tags:
-        - 'v*'
+    tags:
+      - 'v*'
   workflow_dispatch:
 
 jobs:
