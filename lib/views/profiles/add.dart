@@ -89,10 +89,14 @@ class AddProfileMenu extends ConsumerWidget {
   ) async {
     final data = await Clipboard.getData('text/plain');
     final text = data?.text?.trim();
-    if (text == null || text.isEmpty) return;
-
-    final links =
-        text.split('\n').map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
+    if (text == null || text.isEmpty) {
+      return;
+    }
+    final links = text
+        .split('\n')
+        .map((e) => e.trim())
+        .where((e) => e.isNotEmpty)
+        .toList();
     final profilesAction = ref.read(profilesActionProvider.notifier);
     if (links.length > 1) {
       await profilesAction.addProfilesFromLinks(links);
