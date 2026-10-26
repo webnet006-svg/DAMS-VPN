@@ -79,3 +79,5 @@ devtools_options.yaml
 .fvm/
 .fvmrc
 /coverage/lcov.info
+
+/android/local.properties
