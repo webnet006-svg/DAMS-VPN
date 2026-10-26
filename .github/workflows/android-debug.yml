@@ -3,9 +3,10 @@ name: Build Android Debug APK
 on:
   push:
     branches:
-      - '**'
-    tags:
-      - 'v*'
+      - main
+      - master
+      tags:
+        - 'v*'
   workflow_dispatch:
 
 jobs:
@@ -34,8 +35,21 @@ jobs:
         with:
           go-version: '1.27.1'
 
+      - name: Set up Android SDK & NDK r28c
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libclang-dev
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses > /dev/null 2>&1 || true
+          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "ndk;28.2.13676358"
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/28.2.13676358" >> $GITHUB_ENV
+          echo "ANDROID_NDK_ROOT=$ANDROID_HOME/ndk/28.2.13676358" >> $GITHUB_ENV
+          echo "LIBCLANG_PATH=$ANDROID_HOME/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/lib" >> $GITHUB_ENV
+
       - name: Install dependencies
         run: flutter pub get
+
+      - name: Force Gradle NDK version
+        run: echo "ndk.dir=$ANDROID_NDK_HOME" >> android/local.properties
 
       - name: Run tests
         run: flutter test
