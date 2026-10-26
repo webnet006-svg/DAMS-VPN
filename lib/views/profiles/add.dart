@@ -8,6 +8,7 @@ import 'package:fl_clash/ui/icons/icons.dart';
 import 'package:fl_clash/views/profiles/custom/custom.dart';
 import 'package:fl_clash/features/form/form.dart';
 import 'package:fl_clash/widgets/widgets.dart';
+import 'package:flutter/services.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -82,6 +83,24 @@ class AddProfileMenu extends ConsumerWidget {
     }
   }
 
+  Future<void> _handleAddProfileFromClipboard(
+    BuildContext context,
+    WidgetRef ref,
+  ) async {
+    final data = await Clipboard.getData('text/plain');
+    final text = data?.text?.trim();
+    if (text == null || text.isEmpty) return;
+
+    final links =
+        text.split('\n').map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
+    final profilesAction = ref.read(profilesActionProvider.notifier);
+    if (links.length > 1) {
+      await profilesAction.addProfilesFromLinks(links);
+    } else if (links.length == 1) {
+      await profilesAction.addProfileFromLink(links.first);
+    }
+  }
+
   Future<void> _toSendFromPhone(WidgetRef ref) async {
     final profilesAction = ref.read(profilesActionProvider.notifier);
     if (!(await app?.requestLocalNetworkPermission() ?? true)) {
@@ -145,6 +164,11 @@ class AddProfileMenu extends ConsumerWidget {
             glyph: AppGlyphs.cloudDownload,
             label: appLocalizations.link,
             onPressed: () => _toAdd(context, ref),
+          ),
+          CommonPopupMenuItem(
+            glyph: AppGlyphs.paste,
+            label: appLocalizations.importFromClipboard,
+            onPressed: () => _handleAddProfileFromClipboard(context, ref),
           ),
           if (system.isTV)
             CommonPopupMenuItem(

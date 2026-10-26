@@ -56,11 +56,11 @@ jobs:
         continue-on-error: true
 
       - name: Build Debug APK
-        run: flutter build apk --debug
+        run: flutter build apk --debug --split-per-abi
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: dams-vpn-debug-apk
-          path: build/app/outputs/flutter-apk/app-debug.apk
+          path: build/app/outputs/flutter-apk/app-*-debug.apk
           retention-days: 7
