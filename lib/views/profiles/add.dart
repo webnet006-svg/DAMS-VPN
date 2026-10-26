@@ -167,7 +167,7 @@ class AddProfileMenu extends ConsumerWidget {
           ),
           CommonPopupMenuItem(
             glyph: AppGlyphs.paste,
-            label: appLocalizations.importFromClipboard,
+            label: 'Clipboard',
             onPressed: () => _handleAddProfileFromClipboard(context, ref),
           ),
           if (system.isTV)
