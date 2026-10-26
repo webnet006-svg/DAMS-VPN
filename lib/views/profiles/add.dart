@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:fl_clash/common/common.dart';
+import 'package:fl_clash/models/models.dart';
 import 'package:fl_clash/pages/scan.dart';
 import 'package:fl_clash/plugins/app.dart';
 import 'package:fl_clash/providers/providers.dart';
@@ -89,19 +91,43 @@ class AddProfileMenu extends ConsumerWidget {
   ) async {
     final data = await Clipboard.getData('text/plain');
     final text = data?.text?.trim();
-    if (text == null || text.isEmpty) {
+    if (text == null || text.isEmpty) return;
+
+    final profilesAction = ref.read(profilesActionProvider.notifier);
+
+    // Case 1: YAML content (starts with "proxies:" or contains "proxy-groups:")
+    if (text.contains('proxies:') || text.contains('proxy-groups:')) {
+      final profile = Profile.normal(label: 'Clipboard YAML');
+      final savedProfile = await profile.saveFile(
+        utf8.encode(text),
+        validate: (path, key) =>
+            ref.read(coreHandlerProvider).validateProfile(path, key),
+      );
+      if (savedProfile != null) {
+        profilesAction.putProfile(savedProfile);
+      }
       return;
     }
+
+    // Case 2: links (one or more)
     final links = text
         .split('\n')
         .map((e) => e.trim())
         .where((e) => e.isNotEmpty)
         .toList();
-    final profilesAction = ref.read(profilesActionProvider.notifier);
-    if (links.length > 1) {
-      await profilesAction.addProfilesFromLinks(links);
-    } else if (links.length == 1) {
+
+    if (links.isEmpty) return;
+
+    // If a single link
+    if (links.length == 1) {
       await profilesAction.addProfileFromLink(links.first);
+      return;
+    }
+
+    // If multiple links: process them one by one to avoid conflict
+    // between share links and subscription URLs.
+    for (final link in links) {
+      await profilesAction.addProfileFromLink(link);
     }
   }
 
