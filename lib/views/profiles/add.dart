@@ -85,6 +85,94 @@ class AddProfileMenu extends ConsumerWidget {
     }
   }
 
+  String? _parseShareLinkToYaml(String link) {
+    final uri = Uri.tryParse(link);
+    if (uri == null) return null;
+
+    final scheme = uri.scheme;
+    if (scheme == 'vmess') {
+      final base64Str = link.replaceFirst('vmess://', '').trim();
+      try {
+        final normalized = base64.normalize(base64Str);
+        final decoded = utf8.decode(base64.decode(normalized));
+        final json = jsonDecode(decoded) as Map<String, dynamic>;
+        final name = json['ps'] ?? 'VMess Node';
+        final server = json['add'];
+        final port = json['port'];
+        final uuid = json['id'];
+        final alterId = json['aid'] ?? 0;
+        final cipher = json['scy'] ?? 'auto';
+        final network = json['net'] ?? 'tcp';
+        final tls = json['tls'] == 'tls';
+        final host = json['host'] ?? '';
+        final path = json['path'] ?? '/';
+        return '''
+- name: "$name"
+  type: vmess
+  server: $server
+  port: $port
+  uuid: $uuid
+  alterId: $alterId
+  cipher: $cipher
+  udp: true
+  network: $network
+  tls: $tls
+  ws-opts:
+    path: "$path"
+    headers:
+      Host: "$host"
+''';
+      } catch (_) {
+        return null;
+      }
+    }
+
+    if (scheme == 'vless' || scheme == 'trojan' || scheme == 'ss') {
+      final passwordOrUuid = uri.userInfo;
+      final server = uri.host;
+      final port = uri.port;
+      final params = uri.queryParameters;
+      final name = uri.fragment.isNotEmpty
+          ? Uri.decodeComponent(uri.fragment)
+          : '$scheme Node';
+      final type = params['type'] ?? 'tcp';
+      final security = params['security'] ?? 'none';
+      final sni = params['sni'] ?? '';
+      final host = params['host'] ?? '';
+      final path = params['path'] ?? '/';
+      final flow = params['flow'] ?? '';
+      final serviceName = params['serviceName'] ?? '';
+
+      final typeLine = scheme == 'ss' ? 'ss' : scheme;
+      final parts = passwordOrUuid.split(':');
+      final cipher = parts.first.isNotEmpty ? parts.first : 'aes-256-gcm';
+      final password = parts.length > 1 ? parts.last : '';
+      final cipherLine = scheme == 'ss' ? '\n  cipher: $cipher' : '';
+      final authLine = scheme == 'ss'
+          ? '\n  password: "$password"'
+          : '\n  uuid: "$passwordOrUuid"';
+
+      return '''
+- name: "$name"
+  type: $typeLine
+  server: $server
+  port: $port$authLine$cipherLine
+  udp: true
+  network: $type
+  tls: ${security == 'tls' || security == 'reality'}
+  servername: "$sni"
+  flow: "$flow"
+  ws-opts:
+    path: "$path"
+    headers:
+      Host: "$host"
+  grpc-opts:
+    grpc-service-name: "$serviceName"
+''';
+    }
+    return null;
+  }
+
   Future<void> _handleAddProfileFromClipboard(
     BuildContext context,
     WidgetRef ref,
@@ -95,7 +183,7 @@ class AddProfileMenu extends ConsumerWidget {
 
     final profilesAction = ref.read(profilesActionProvider.notifier);
 
-    // Case 1: YAML content (starts with "proxies:" or contains "proxy-groups:")
+    // Case 1: YAML content
     if (text.contains('proxies:') || text.contains('proxy-groups:')) {
       final profile = Profile.normal(label: 'Clipboard YAML');
       final savedProfile = await profile.saveFile(
@@ -103,31 +191,47 @@ class AddProfileMenu extends ConsumerWidget {
         validate: (path, key) =>
             ref.read(coreHandlerProvider).validateProfile(path, key),
       );
-      if (savedProfile != null) {
-        profilesAction.putProfile(savedProfile);
-      }
+      if (savedProfile != null) profilesAction.putProfile(savedProfile);
       return;
     }
 
-    // Case 2: links (one or more)
+    // Case 2: one or more links
     final links = text
         .split('\n')
         .map((e) => e.trim())
         .where((e) => e.isNotEmpty)
         .toList();
-
     if (links.isEmpty) return;
 
-    // If a single link
     if (links.length == 1) {
+      final yaml = _parseShareLinkToYaml(links.first);
+      if (yaml != null) {
+        final profile = Profile.normal(label: 'Clipboard');
+        final savedProfile = await profile.saveFile(
+          utf8.encode('proxies:\n$yaml'),
+          validate: (path, key) =>
+              ref.read(coreHandlerProvider).validateProfile(path, key),
+        );
+        if (savedProfile != null) profilesAction.putProfile(savedProfile);
+        return;
+      }
       await profilesAction.addProfileFromLink(links.first);
       return;
     }
 
-    // If multiple links: process them one by one to avoid conflict
-    // between share links and subscription URLs.
     for (final link in links) {
-      await profilesAction.addProfileFromLink(link);
+      final yaml = _parseShareLinkToYaml(link);
+      if (yaml != null) {
+        final profile = Profile.normal(label: 'Clipboard');
+        final savedProfile = await profile.saveFile(
+          utf8.encode('proxies:\n$yaml'),
+          validate: (path, key) =>
+              ref.read(coreHandlerProvider).validateProfile(path, key),
+        );
+        if (savedProfile != null) profilesAction.putProfile(savedProfile);
+      } else {
+        await profilesAction.addProfileFromLink(link);
+      }
     }
   }
 
